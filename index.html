@@ -99,7 +99,7 @@
     root: '/',
     scheme: 'Pisces',
     version: '5.1.4',
-    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":true,"onmobile":false},
     fancybox: true,
     tabs: true,
     motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
@@ -202,9 +202,41 @@
       
 
       
+        <li class="menu-item menu-item-search">
+          
+            <a href="javascript:;" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br>
+            
+            Search
+          </a>
+        </li>
+      
     </ul>
   
 
+  
+    <div class="site-search">
+      
+  <div class="popup search-popup local-search-popup">
+  <div class="local-search-header clearfix">
+    <span class="search-icon">
+      <i class="fa fa-search"></i>
+    </span>
+    <span class="popup-btn-close">
+      <i class="fa fa-times-circle"></i>
+    </span>
+    <div class="local-search-input-wrapper">
+      <input autocomplete="off" placeholder="Searching..." spellcheck="false" type="text" id="local-search-input">
+    </div>
+  </div>
+  <div id="local-search-result"></div>
+</div>
+
+
+
+    </div>
   
 </nav>
 
@@ -252,7 +284,7 @@
         
           <h1 class="post-title" itemprop="name headline">
                 
-                <a class="post-title-link" href="/2019/09/29/【译】列式数据库/" itemprop="url">Untitled</a></h1>
+                <a class="post-title-link" href="/2019/09/29/【译】列式数据库/" itemprop="url">【译】列式数据库</a></h1>
         
 
         <div class="post-meta">
@@ -264,7 +296,7 @@
               
                 <span class="post-meta-item-text">Posted on</span>
               
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2019-09-29T11:04:26+08:00">
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2019-09-29T11:08:59+08:00">
                 2019-09-29
               </time>
             
@@ -303,78 +335,15 @@
 
       
         
-          
-            <p><em>翻译自<a href="https://en.wikipedia.org/wiki/Column-oriented_DBMS" target="_blank" rel="noopener">Column-oriented DBMS</a></em></p>
+          <p><em>翻译自<a href="https://en.wikipedia.org/wiki/Column-oriented_DBMS" target="_blank" rel="noopener">Column-oriented DBMS</a></em></p>
 <h1 id="Column-oriented-DBMS"><a href="#Column-oriented-DBMS" class="headerlink" title="Column-oriented DBMS"></a>Column-oriented DBMS</h1><p>面向列的DBMS（或列式数据库管理系统）是按列而不是按行存储数据表的数据库管理系统。在关系型数据库管理系统领域，使用列式存储和行式存储并没有什么区别。列和行数据库都可以使用传统的数据库查询语言（如sql）来加载数据并执行查询。列和行数据库都可以成为系统的支柱，为通用extract-transform-load（ETL）和数据可视化系统提供数据。然而，将数据存储在列中而不是行中，数据库可以更精确的访问到某个查询请求需要的数据，而不是扫描并丢弃行中不需要的数据。查询性能由此而提高，尤其是在非常大的数据集中。</p>
-<h2 id="描述"><a href="#描述" class="headerlink" title="描述"></a>描述</h2><h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>关系型数据库管理系统的数据描述了一个包含列和行的二维表。比如说一个数据库里有这样一张表：</p>
-<table>
-<thead>
-<tr>
-<th>RowId</th>
-<th>EmpId</th>
-<th>Lastname</th>
-<th>Firstname</th>
-<th>Salary</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>001</td>
-<td>10</td>
-<td>Smith</td>
-<td>Joe</td>
-<td>40000</td>
-</tr>
-<tr>
-<td>002</td>
-<td>12</td>
-<td>Jones</td>
-<td>Mary</td>
-<td>50000</td>
-</tr>
-<tr>
-<td>003</td>
-<td>11</td>
-<td>Johnson</td>
-<td>Cathy</td>
-<td>44000</td>
-</tr>
-<tr>
-<td>004</td>
-<td>22</td>
-<td>Jones</td>
-<td>Bob</td>
-<td>55000</td>
-</tr>
-</tbody></table>
-<p>这个简单的表包含了一个员工的标识（EmpId）、名称字段（Lastname和Firstname）和工资。这个二维表的格式是一种抽象，实际的实现中硬件存储会要求数据被序列化成某一种格式。</p>
-<p>涉及到硬盘的最昂贵的操作是<a href="https://en.wikipedia.org/wiki/Seek_delay" target="_blank" rel="noopener">寻址</a>，为了改善整体的性能，应该用可以最小化寻址次数的方式存储关联数据。这就是人们熟知的<a href="https://en.wikipedia.org/wiki/Locality_of_reference" target="_blank" rel="noopener">Locality of reference</a>，基本概念出现在不同的上下文环境中。硬盘以一些列固定大小的块组织起来，通常可以存放表里若干行数据。通过组织表的数据，使行适应这些块，并将相邻的行分组到连续的块中。在很多情况下，需要读取或寻找的块数和寻址的次数一起被最小化了（译者注：这句没懂…）。</p>
-<h3 id="面向行的系统"><a href="#面向行的系统" class="headerlink" title="面向行的系统"></a>面向行的系统</h3><p>存储一张表的通用做法是序列化每一行数据，就像这样：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">001:10,Smith,Joe,40000;</span><br><span class="line">002:12,Jones,Mary,50000;</span><br><span class="line">003:11,Johnson,Cathy,44000;</span><br><span class="line">004:22,Jones,Bob,55000;</span><br></pre></td></tr></table></figure>
-
-<p>当数据插入表中时，它被分配一个内部的id，这个<code>rowid</code>字段在系统内部被用来关联数据。在这种情况下，记录具有独立于用户指定的empid的顺序rowid。这个例子当中，DBMS用短整型（short integer）存放rowid，实际使用会用更大的数字，比如64位、128位。</p>
-<p>基于行的系统被设计的用尽可能少的操作，就可以有效的返回整行或记录数据。这适合一些常见的用例，比如系统尝试获取某一特定对象的信息，像是名片系统里用户的联系信息，或是线上购物系统里的商品信息。通过将这些数据和其它相邻数据存放到一个单独的块中，系统可以很快的用最少的操作获取到记录。</p>
-<p>与一小部分特定的数据相反，行式系统在整张表上做集合范围（set-wide）的操作往往很低效。例如在这个例子里，要想找到工资在40000到50000之间的全部记录，DBMS必须完全遍历整个表来寻找匹配的记录。在上述的表格里数据可能在一个单独的块中，有上百行记录的表就不会这样，这时候就需要用多次磁盘操作来获取数据，并检查它。</p>
-<p>为了提高这些操作的性能（这是很常见的，并且也是DBMS的关键点），大多数DBMS支持使用索引，将一列里所有的数据和可以指引到原始表的rowid存放到一起。salary列的索引看起来是这个样子的：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">001:40000;</span><br><span class="line">003:44000;</span><br><span class="line">002:50000;</span><br><span class="line">004:55000;</span><br></pre></td></tr></table></figure>
-
-<p>由于它们只存储了一小片数据，而不是整行，索引总的来说要比主表要小。扫描这个小数据集减少了磁盘的操作。如果索引被重度使用，它可以显著的减少常见操作的时间。然而维护索引增加了系统的开销，尤其是新数据写入到数据库的时候，记录不仅要存放到主表，任何附加的索引都要同步更新。</p>
-<p>在某一列或某些列的数据库索引通常都是按列存储，因此范围查找的操作（比如上面说的“获取工资在40000到50000的全部记录”）会非常快。</p>
-<p>一些行数据库被设计的完全填充到内存中，成为一个<a href="https://en.wikipedia.org/wiki/In-memory_database" target="_blank" rel="noopener">内存数据库</a>，这些系统不依赖磁盘操作，而且对于整个数据集有相等的访问时间。这样就不需要索引了，因为在典型的聚合场景中，扫描原始数据和整个索引所需要的操作数量是相同的。这样的系统可能更简单更小，但是只能管理能放进内存的数据库。</p>
-<h3 id="面向列的系统"><a href="#面向列的系统" class="headerlink" title="面向列的系统"></a>面向列的系统</h3><p>面向列的数据库将一列的全部数据序列化到一起，然后是另外一列，以此类推。例如我们的样例表，数据存储的风格是这样的：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">10:001,12:002,11:003,22:004;</span><br><span class="line">Smith:001,Jones:002,Johnson:003,Jones:004;</span><br><span class="line">Joe:001,Mary:002,Cathy:003,Bob:004;</span><br><span class="line">40000:001,50000:002,44000:003,55000:004;</span><br></pre></td></tr></table></figure>
-
-<p>这个布局，列更像是行式系统里的索引结构，这会让人们误以为：列式存储“不就是”每一列都带有索引的行式存储吗。其实这和数据映射还是有明显不同的。在面向行的索引系统里，主键是rowid，是从索引数据到主键的映射。而在面向列的系统里，主键是数据，是从数据到rowid的映射（译者注：文中的顺序与此相反）。这之间的区别很微妙，不过稍微修改一下存储方式就能看出来：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">…;Smith:001;Jones:002,004;Johnson:003;…</span><br></pre></td></tr></table></figure>
-
-<p>列式系统是否更高效很大程度上取决于工作负载的自动化（译者注：大概说的是一个操作从请求到响应之间的一系列工作workload）。获取一个给定对象的全部数据（一整行）就很慢。基于行的系统只要一次磁盘操作就可以获取到一行数据，而列式数据库里收集多列的数据就需要多次磁盘操作。不过，整行的操作比较罕见，大多数情况只需要数据的有限的子集。比如在名片系统，收集firstname和lastname来构建一个联系人列表就远比读取一个address的全部数据要常见。写入数据到数据库更是如此，尤其是数据很稀疏，很多列式可选的（optional）。因此，列存储尽管有很多理论上的缺陷，却依然展示出了优异的性能。</p>
-<p>分区、索引、缓存、视图、<a href="https://en.wikipedia.org/wiki/OLAP_cube" target="_blank" rel="noopener">OLAP cube</a>和事务性系统（比如<a href="https://en.wikipedia.org/wiki/Write-ahead_logging" target="_blank" rel="noopener">write-ahead logging</a>或<a href="https://en.wikipedia.org/wiki/Multiversion_concurrency_control" target="_blank" rel="noopener">多版本并发控制</a>）都会显著的影响任何一个系统的物理架构。也就是说，基于联机事务处理（OLTP）的RDBMS更多的面向行，而基于联机分析处理（OLAP）的系统则在面向行与列中权衡。</p>
-<h2 id="优势"><a href="#优势" class="headerlink" title="优势"></a>优势</h2><p>比较面向行与面向列数据库主要关注在给定工作负载下硬盘访问的效率。因为相比较计算机的其它瓶颈，寻址时间是相当长的。例如说，典型的SATA硬盘驱动器的平均寻址时间在16到22毫秒之间，而动态随机存取存储器（DRAM，也就是内存）在Intel Core i7处理器上的平均时间是60纳秒，几乎快400000倍之多。显然，处理大数据的主要瓶颈是磁盘访问。列式数据库通过减少磁盘访问的数量，和对相似列数据的有效压缩（译者注：同一列的数据是压缩存储）提升了系统的性能。</p>
-<p>通过实践得知，列式系统非常适合类似联机分析处理（OLAP）的场景（比如数据仓库），这些系统通常会在全部数据上（PB级）执行高度复杂的查询。但是，总会有一些数据要写进列式数据库的，事务（INSERTs）必须分割成列并在存储时压缩，这使得它不适合OLTP场景。面向行的数据库非常适合于重度依赖交互事务的OLTP-like场景，比如说，当一行的全部数据位于一个单独的位置时，检索这些行数据会非常高效（因为最小化了磁盘寻址），正如面向行的体系架构。不过，面向列的系统已经发展成为可以处理OLTP和OLAP操作的混合系统，面向列的系统面临的一些OLTP的限制通过<a href="https://en.wikipedia.org/wiki/In-memory_database" target="_blank" rel="noopener">内存数据存储</a>来解决。适合于OLAP和OLTP角色的基于列的系统，通过消除对单独系统的依赖（译者注：数据存储系统？），有效地减少了总数据占用。</p>
-<h2 id="压缩"><a href="#压缩" class="headerlink" title="压缩"></a>压缩</h2><p>一列数据的格式时统一的，这意味着可以在存储大小上做一些列式数据能用而行式数据不能用的优化，例如很多流行的压缩方案，比如<a href="https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Welch" target="_blank" rel="noopener">LWZ</a>或<a href="https://en.wikipedia.org/wiki/Run-length_encoding" target="_blank" rel="noopener">游程编码</a>，利用临近数据的相似性进行压缩。实际数据中常见的缺失值和重复值可以用两位标记来表示。相同的技术可以运用到行式数据上，但是效果差强人意。</p>
-<p>为了提升压缩效率，对行进行排序是一个行之有效的方案。例如，使用<a href="https://en.wikipedia.org/wiki/Bitmap_index" target="_blank" rel="noopener">位图索引</a>排序可以将压缩性能提升一个量级。为了使字典顺序在运行长度编码方面的压缩效益最大化，最好使用低基数列作为第一个排序键（译者注：一脸懵逼）。例如，一个表含有性别、年龄和名称列，最好先对性别（基数为2）进行排序，然后对年龄进行排序（基数&lt;150），然后是名称（译者注：哦～）。</p>
-<p>列压缩以牺牲检索效率为代价减少了磁盘空间，相邻压缩越大，随机访问就越困难，因为数据可能需要解压缩才能读取。因此，面向列的体系结构有时需要通过额外的机制来强化，旨在最大限度地减少访问压缩数据的需求（译者注：比如ORCFile格式的轻量级索引）。</p>
-
-          
+          <!--noindex-->
+          <div class="post-button text-center">
+            <a class="btn" href="/2019/09/29/【译】列式数据库/#more" rel="contents">
+              Read more &raquo;
+            </a>
+          </div>
+          <!--/noindex-->
         
       
     </div>
@@ -715,6 +684,15 @@
             
 
             
+              
+              
+              <div class="site-state-item site-state-tags">
+                
+                  <span class="site-state-item-count">1</span>
+                  <span class="site-state-item-name">tags</span>
+                
+              </div>
+            
 
           </nav>
 
@@ -785,6 +763,8 @@
     
       <div class="back-to-top">
         <i class="fa fa-arrow-up"></i>
+        
+          <span id="scrollpercent"><span>0</span>%</span>
         
       </div>
     
@@ -915,6 +895,323 @@
 
 
   
+
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    var isXml = true;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length === 0) {
+      search_path = "search.xml";
+    } else if (/json$/i.test(search_path)) {
+      isXml = false;
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    var onPopupClose = function (e) {
+      $('.popup').hide();
+      $('#local-search-input').val('');
+      $('.search-result-list').remove();
+      $('#no-result').remove();
+      $(".local-search-pop-overlay").remove();
+      $('body').css('overflow', '');
+    }
+
+    function proceedsearch() {
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay"></div>')
+        .css('overflow', 'hidden');
+      $('.search-popup-overlay').click(onPopupClose);
+      $('.popup').toggle();
+      var $localSearchInput = $('#local-search-input');
+      $localSearchInput.attr("autocapitalize", "none");
+      $localSearchInput.attr("autocorrect", "off");
+      $localSearchInput.focus();
+    }
+
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+      'use strict';
+
+      // start loading animation
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay">' +
+          '<div id="search-loading-icon">' +
+          '<i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>' +
+          '</div>' +
+          '</div>')
+        .css('overflow', 'hidden');
+      $("#search-loading-icon").css('margin', '20% auto 0 auto').css('text-align', 'center');
+
+      $.ajax({
+        url: path,
+        dataType: isXml ? "xml" : "json",
+        async: true,
+        success: function(res) {
+          // get the contents from search data
+          isfetched = true;
+          $('.popup').detach().appendTo('.header-inner');
+          var datas = isXml ? $("entry", res).map(function() {
+            return {
+              title: $("title", this).text(),
+              content: $("content",this).text(),
+              url: $("url" , this).text()
+            };
+          }).get() : res;
+          var input = document.getElementById(search_id);
+          var resultContent = document.getElementById(content_id);
+          var inputEventFunction = function() {
+            var searchText = input.value.trim().toLowerCase();
+            var keywords = searchText.split(/[\s\-]+/);
+            if (keywords.length > 1) {
+              keywords.push(searchText);
+            }
+            var resultItems = [];
+            if (searchText.length > 0) {
+              // perform local searching
+              datas.forEach(function(data) {
+                var isMatch = false;
+                var hitCount = 0;
+                var searchTextCount = 0;
+                var title = data.title.trim();
+                var titleInLowerCase = title.toLowerCase();
+                var content = data.content.trim().replace(/<[^>]+>/g,"");
+                var contentInLowerCase = content.toLowerCase();
+                var articleUrl = decodeURIComponent(data.url);
+                var indexOfTitle = [];
+                var indexOfContent = [];
+                // only match articles with not empty titles
+                if(title != '') {
+                  keywords.forEach(function(keyword) {
+                    function getIndexByWord(word, text, caseSensitive) {
+                      var wordLen = word.length;
+                      if (wordLen === 0) {
+                        return [];
+                      }
+                      var startPosition = 0, position = [], index = [];
+                      if (!caseSensitive) {
+                        text = text.toLowerCase();
+                        word = word.toLowerCase();
+                      }
+                      while ((position = text.indexOf(word, startPosition)) > -1) {
+                        index.push({position: position, word: word});
+                        startPosition = position + wordLen;
+                      }
+                      return index;
+                    }
+
+                    indexOfTitle = indexOfTitle.concat(getIndexByWord(keyword, titleInLowerCase, false));
+                    indexOfContent = indexOfContent.concat(getIndexByWord(keyword, contentInLowerCase, false));
+                  });
+                  if (indexOfTitle.length > 0 || indexOfContent.length > 0) {
+                    isMatch = true;
+                    hitCount = indexOfTitle.length + indexOfContent.length;
+                  }
+                }
+
+                // show search results
+
+                if (isMatch) {
+                  // sort index by position of keyword
+
+                  [indexOfTitle, indexOfContent].forEach(function (index) {
+                    index.sort(function (itemLeft, itemRight) {
+                      if (itemRight.position !== itemLeft.position) {
+                        return itemRight.position - itemLeft.position;
+                      } else {
+                        return itemLeft.word.length - itemRight.word.length;
+                      }
+                    });
+                  });
+
+                  // merge hits into slices
+
+                  function mergeIntoSlice(text, start, end, index) {
+                    var item = index[index.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    var hits = [];
+                    var searchTextCountInSlice = 0;
+                    while (position + word.length <= end && index.length != 0) {
+                      if (word === searchText) {
+                        searchTextCountInSlice++;
+                      }
+                      hits.push({position: position, length: word.length});
+                      var wordEnd = position + word.length;
+
+                      // move to next position of hit
+
+                      index.pop();
+                      while (index.length != 0) {
+                        item = index[index.length - 1];
+                        position = item.position;
+                        word = item.word;
+                        if (wordEnd > position) {
+                          index.pop();
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    searchTextCount += searchTextCountInSlice;
+                    return {
+                      hits: hits,
+                      start: start,
+                      end: end,
+                      searchTextCount: searchTextCountInSlice
+                    };
+                  }
+
+                  var slicesOfTitle = [];
+                  if (indexOfTitle.length != 0) {
+                    slicesOfTitle.push(mergeIntoSlice(title, 0, title.length, indexOfTitle));
+                  }
+
+                  var slicesOfContent = [];
+                  while (indexOfContent.length != 0) {
+                    var item = indexOfContent[indexOfContent.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    // cut out 100 characters
+                    var start = position - 20;
+                    var end = position + 80;
+                    if(start < 0){
+                      start = 0;
+                    }
+                    if (end < position + word.length) {
+                      end = position + word.length;
+                    }
+                    if(end > content.length){
+                      end = content.length;
+                    }
+                    slicesOfContent.push(mergeIntoSlice(content, start, end, indexOfContent));
+                  }
+
+                  // sort slices in content by search text's count and hits' count
+
+                  slicesOfContent.sort(function (sliceLeft, sliceRight) {
+                    if (sliceLeft.searchTextCount !== sliceRight.searchTextCount) {
+                      return sliceRight.searchTextCount - sliceLeft.searchTextCount;
+                    } else if (sliceLeft.hits.length !== sliceRight.hits.length) {
+                      return sliceRight.hits.length - sliceLeft.hits.length;
+                    } else {
+                      return sliceLeft.start - sliceRight.start;
+                    }
+                  });
+
+                  // select top N slices in content
+
+                  var upperBound = parseInt('1');
+                  if (upperBound >= 0) {
+                    slicesOfContent = slicesOfContent.slice(0, upperBound);
+                  }
+
+                  // highlight title and content
+
+                  function highlightKeyword(text, slice) {
+                    var result = '';
+                    var prevEnd = slice.start;
+                    slice.hits.forEach(function (hit) {
+                      result += text.substring(prevEnd, hit.position);
+                      var end = hit.position + hit.length;
+                      result += '<b class="search-keyword">' + text.substring(hit.position, end) + '</b>';
+                      prevEnd = end;
+                    });
+                    result += text.substring(prevEnd, slice.end);
+                    return result;
+                  }
+
+                  var resultItem = '';
+
+                  if (slicesOfTitle.length != 0) {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + highlightKeyword(title, slicesOfTitle[0]) + "</a>";
+                  } else {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + title + "</a>";
+                  }
+
+                  slicesOfContent.forEach(function (slice) {
+                    resultItem += "<a href='" + articleUrl + "'>" +
+                      "<p class=\"search-result\">" + highlightKeyword(content, slice) +
+                      "...</p>" + "</a>";
+                  });
+
+                  resultItem += "</li>";
+                  resultItems.push({
+                    item: resultItem,
+                    searchTextCount: searchTextCount,
+                    hitCount: hitCount,
+                    id: resultItems.length
+                  });
+                }
+              })
+            };
+            if (keywords.length === 1 && keywords[0] === "") {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>'
+            } else if (resultItems.length === 0) {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>'
+            } else {
+              resultItems.sort(function (resultLeft, resultRight) {
+                if (resultLeft.searchTextCount !== resultRight.searchTextCount) {
+                  return resultRight.searchTextCount - resultLeft.searchTextCount;
+                } else if (resultLeft.hitCount !== resultRight.hitCount) {
+                  return resultRight.hitCount - resultLeft.hitCount;
+                } else {
+                  return resultRight.id - resultLeft.id;
+                }
+              });
+              var searchResultList = '<ul class=\"search-result-list\">';
+              resultItems.forEach(function (result) {
+                searchResultList += result.item;
+              })
+              searchResultList += "</ul>";
+              resultContent.innerHTML = searchResultList;
+            }
+          }
+
+          if ('auto' === 'auto') {
+            input.addEventListener('input', inputEventFunction);
+          } else {
+            $('.search-icon').click(inputEventFunction);
+            input.addEventListener('keypress', function (event) {
+              if (event.keyCode === 13) {
+                inputEventFunction();
+              }
+            });
+          }
+
+          // remove loading animation
+          $(".local-search-pop-overlay").remove();
+          $('body').css('overflow', '');
+
+          proceedsearch();
+        }
+      });
+    }
+
+    // handle and trigger popup window;
+    $('.popup-trigger').click(function(e) {
+      e.stopPropagation();
+      if (isfetched === false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+    });
+
+    $('.popup-btn-close').click(onPopupClose);
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+    $(document).on('keyup', function (event) {
+      var shouldDismissSearchPopup = event.which === 27 &&
+        $('.search-popup').is(':visible');
+      if (shouldDismissSearchPopup) {
+        onPopupClose();
+      }
+    });
+  </script>
 
 
 
