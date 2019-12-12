@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-CH">
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform">
+<meta http-equiv="Cache-Control" content="no-siteapp">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css">
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css">
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="MySQL,leader-election,">
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="前言为了保证服务的高可用, 我们通常会将其部署到多个节点(或者多个容器). 但是某些异步任务我们希望只交给一个实例来处理, 或者说, 要在这些服务中选出一个leader. zookeeper的菜谱里有一道招牌菜就是leader election, 不过今天我们不打算点这道菜, 看看用随手可得的MySQL能否满足我们的需求.">
+<meta name="keywords" content="MySQL,leader-election">
+<meta property="og:type" content="article">
+<meta property="og:title" content="用MySQL实现leader选举">
+<meta property="og:url" content="http://yoursite.com/2019/12/12/用MySQL实现leader选举/index.html">
+<meta property="og:site_name" content="不甘平庸">
+<meta property="og:description" content="前言为了保证服务的高可用, 我们通常会将其部署到多个节点(或者多个容器). 但是某些异步任务我们希望只交给一个实例来处理, 或者说, 要在这些服务中选出一个leader. zookeeper的菜谱里有一道招牌菜就是leader election, 不过今天我们不打算点这道菜, 看看用随手可得的MySQL能否满足我们的需求.">
+<meta property="og:locale" content="zh-CH">
+<meta property="og:image" content="http://yoursite.com/images/elect.png">
+<meta property="og:image" content="http://yoursite.com/2019/12/12/images/reelect.png">
+<meta property="og:image" content="http://yoursite.com/2019/12/12/images/election-service.png">
+<meta property="og:updated_time" content="2019-12-12T11:36:05.775Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="用MySQL实现leader选举">
+<meta name="twitter:description" content="前言为了保证服务的高可用, 我们通常会将其部署到多个节点(或者多个容器). 但是某些异步任务我们希望只交给一个实例来处理, 或者说, 要在这些服务中选出一个leader. zookeeper的菜谱里有一道招牌菜就是leader election, 不过今天我们不打算点这道菜, 看看用随手可得的MySQL能否满足我们的需求.">
+<meta name="twitter:image" content="http://yoursite.com/images/elect.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":true,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2019/12/12/用MySQL实现leader选举/">
+
+
+
+
+
+  <title>用MySQL实现leader选举 | 不甘平庸</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-CH">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">不甘平庸</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">积累 自驱 自制 坚持</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br>
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br>
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="javascript:;" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br>
+            
+            Search
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup search-popup local-search-popup">
+  <div class="local-search-header clearfix">
+    <span class="search-icon">
+      <i class="fa fa-search"></i>
+    </span>
+    <span class="popup-btn-close">
+      <i class="fa fa-times-circle"></i>
+    </span>
+    <div class="local-search-input-wrapper">
+      <input autocomplete="off" placeholder="Searching..." spellcheck="false" type="text" id="local-search-input">
+    </div>
+  </div>
+  <div id="local-search-result"></div>
+</div>
+
+
+
+    </div>
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/12/12/用MySQL实现leader选举/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="刘蒙">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="不甘平庸">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">用MySQL实现leader选举</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2019-12-12T18:10:20+08:00">
+                2019-12-12
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>为了保证服务的高可用, 我们通常会将其部署到多个节点(或者多个容器). 但是某些异步任务我们希望只交给一个实例来处理, 或者说, 要在这些服务中选出一个leader.</p>
+<p>zookeeper的菜谱里有一道招牌菜就是<code>leader election</code>, 不过今天我们不打算点这道菜, 看看用随手可得的MySQL能否满足我们的需求.</p>
+<a id="more"></a>
+
+<h2 id="leader-election"><a href="#leader-election" class="headerlink" title="leader-election"></a>leader-election</h2><p>关于leader选举我们知道:</p>
+<ul>
+<li>选举是一个低频的动作, 只是在竞选的时候有一定的并发</li>
+<li>选举完成leader和follower都要保持会话(比如心跳), leader挂掉所有的follower可以及时参加选举</li>
+<li>如果leader从假死状态中恢复发现自己已经不是leader了, 则自动变身为follower</li>
+<li>如果leader和follower之间没有交互, 各服务实例只需要知道自己是不是leader就行了</li>
+</ul>
+<p>在这里MySQL扮演的是一个第三方服务, 来协调leader和follower之间的关系, 不过MySQL本身是没有这个功能的, 我们可以利用它的一些特性来实现.</p>
+<h2 id="预备知识"><a href="#预备知识" class="headerlink" title="预备知识"></a>预备知识</h2><p>选举时, 多个实例只有一个能竞争成功, 用CAS算法再合适不过了. MySQL的CAS可以用版本号来实现.</p>
+<blockquote>
+<p>比如有一个表如下字段: id, key, value, version(int), 每次更新value时都带着版本号</p>
+</blockquote>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">update</span> tbl <span class="keyword">set</span> <span class="keyword">value</span> = ?, <span class="keyword">version</span> = <span class="keyword">version</span> + <span class="number">1</span> <span class="keyword">where</span> <span class="keyword">key</span> = ? <span class="keyword">version</span> = ?</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<ul>
+<li>更新前先获得当前的版本号, 比如初始版本是1, 则大家都拿到了1</li>
+<li>所有人都在执行上述更新, 都想把version变成2, MySQL保证了同一时刻只会有一个人实现了他的愿望</li>
+<li>唯一的幸运儿更新完成后, 其他人拿着1就变成了脏数据, 自然更新失败</li>
+</ul>
+</blockquote>
+<blockquote>
+<p>至此leader已经选出来了, 没有加锁也无需自旋, 是不是很简单呢!</p>
+</blockquote>
+<h1 id="设计"><a href="#设计" class="headerlink" title="设计"></a>设计</h1><h2 id="初次选举过程"><a href="#初次选举过程" class="headerlink" title="初次选举过程"></a>初次选举过程</h2><p><img src="/images/elect.png" alt="elect"></p>
+<ul>
+<li>初始版本号为0, 服务实例初始化时都试图更新选举版本号, 但只有一个成功, 成功者成为leader</li>
+<li>leader定时向MySQL发送心跳, 维护来之不易的版本号</li>
+<li>follower定时探测leader最后一次心跳时间, 如果超过时限(比如5s)就认为leader宕机</li>
+</ul>
+<h2 id="leader宕机之后的改选"><a href="#leader宕机之后的改选" class="headerlink" title="leader宕机之后的改选"></a>leader宕机之后的改选</h2><p><img src="../images/reelect.png" alt="reelect"></p>
+<ul>
+<li>follower探测到leader心跳中断, 不论是卡主还是宕机, 都认为leader挂掉</li>
+<li>获取最后一次心跳的版本号, 重复上述选举过程</li>
+</ul>
+<p>#实现</p>
+<h2 id="竞争表"><a href="#竞争表" class="headerlink" title="竞争表"></a>竞争表</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> <span class="string">`leader_election`</span> (</span><br><span class="line">	<span class="string">`elect_key`</span> <span class="built_in">varchar</span>(<span class="number">255</span>) <span class="keyword">NOT</span> <span class="literal">NULL</span> <span class="keyword">COMMENT</span> <span class="string">'选举的key'</span>,</span><br><span class="line">	<span class="string">`version`</span> <span class="built_in">bigint</span> <span class="keyword">NOT</span> <span class="literal">NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span> <span class="keyword">COMMENT</span> <span class="string">'当前版本号, 每次选举和心跳都会在此字段进行cas'</span>,</span><br><span class="line">	<span class="string">`tick_time`</span> datetime <span class="keyword">NOT</span> <span class="literal">NULL</span> <span class="keyword">DEFAULT</span> <span class="keyword">CURRENT_TIMESTAMP</span> <span class="keyword">ON</span> <span class="keyword">UPDATE</span> <span class="keyword">CURRENT_TIMESTAMP</span> <span class="keyword">COMMENT</span> <span class="string">'心跳时间'</span>,</span><br><span class="line">	<span class="string">`leader_id`</span> <span class="built_in">bigint</span> <span class="keyword">NOT</span> <span class="literal">NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span> <span class="keyword">COMMENT</span> <span class="string">'leader所在实例的id'</span>,</span><br><span class="line">	<span class="string">`create_time`</span> datetime <span class="keyword">NOT</span> <span class="literal">NULL</span> <span class="keyword">DEFAULT</span> <span class="keyword">CURRENT_TIMESTAMP</span> <span class="keyword">COMMENT</span> <span class="string">'创建时间'</span>,</span><br><span class="line">	<span class="string">`update_time`</span> datetime <span class="keyword">NOT</span> <span class="literal">NULL</span> <span class="keyword">DEFAULT</span> <span class="keyword">CURRENT_TIMESTAMP</span> <span class="keyword">ON</span> <span class="keyword">UPDATE</span> <span class="keyword">CURRENT_TIMESTAMP</span> <span class="keyword">COMMENT</span> <span class="string">'更新时间'</span>,</span><br><span class="line">	PRIMARY <span class="keyword">KEY</span> (<span class="string">`elect_key`</span>),</span><br><span class="line">	<span class="keyword">KEY</span> <span class="string">`idx_version`</span> (<span class="string">`version`</span>)</span><br><span class="line">) <span class="keyword">ENGINE</span>=<span class="keyword">InnoDB</span> <span class="keyword">DEFAULT</span> <span class="keyword">CHARSET</span>=utf8mb4 <span class="keyword">COMMENT</span>=<span class="string">'leader选举'</span>;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>这里不需要value字段</li>
+<li>leader会定时发送tick_time, follower也会定时探测leader的心跳时间, 超过一定时间就认为leader已经宕机了, 开始重新选举</li>
+<li>leader_id可有可无, 如果leader于follower之间有交互这里可以换成ip:port</li>
+</ul>
+<h2 id="服务实现"><a href="#服务实现" class="headerlink" title="服务实现"></a>服务实现</h2><h3 id="选举服务具备以下职责"><a href="#选举服务具备以下职责" class="headerlink" title="选举服务具备以下职责"></a>选举服务具备以下职责</h3><p><img src="../images/election-service.png" alt="election-service"></p>
+<ul>
+<li><code>tick</code> 是leader的操作, 向MySQL发送心跳, 就是将version自增然后用CAS写入</li>
+<li><code>doesLeaderCrashed</code> follower的操作, 探测leader是否宕机, 不管leader是刚好卡主还是真的宕掉了, 只要最后一次心跳距今超过5s就算宕机</li>
+<li><code>elect</code> 初次选举, 初始版本号固定为0</li>
+<li><code>reelect</code> 改选, leader宕机之后的再次选举, 初始版本设定为最后一次心跳的版本</li>
+<li><code>isLeader</code> 供其他服务调用, 判断自身实例是否是leader</li>
+<li><code>getServiceId</code> 每个服务都有一个全局唯一的id</li>
+</ul>
+<h3 id="leader的心跳和follower的探活都由定时任务来发起"><a href="#leader的心跳和follower的探活都由定时任务来发起" class="headerlink" title="leader的心跳和follower的探活都由定时任务来发起"></a>leader的心跳和follower的探活都由定时任务来发起</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Autowired</span></span><br><span class="line"><span class="keyword">private</span> ElectionService electionService;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** leader: 发送心跳 */</span></span><br><span class="line"><span class="meta">@Async</span></span><br><span class="line"><span class="meta">@Scheduled</span>(cron = <span class="string">"*/5 * * * * ?"</span>)</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">tick</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	<span class="keyword">if</span> (!electionService.isLeader()) &#123;</span><br><span class="line">		<span class="keyword">return</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> (electionService.tick()) &#123;</span><br><span class="line">		log.info(<span class="string">"leader: 心跳发送成功, 继续作威作福"</span>);</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		log.info(<span class="string">"leader: 心跳发送失败, 失去leader资格"</span>);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** follower: 虎视眈眈, 持续探测leader是否宕机, 如果宕机则重新开始选举 */</span></span><br><span class="line"><span class="meta">@Async</span></span><br><span class="line"><span class="meta">@Scheduled</span>(cron = <span class="string">"*/5 * * * * ?"</span>)</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">detectAndReelect</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	<span class="keyword">try</span> &#123;</span><br><span class="line">		<span class="comment">// 这里停留1s是为了当主宕机了, follower可以尽快发现</span></span><br><span class="line">		<span class="comment">// 如果不停留则有可能等到下一波探活才能发现</span></span><br><span class="line">		Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">	&#125; <span class="keyword">catch</span> (InterruptedException ignored) &#123;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (electionService.isLeader()) &#123;</span><br><span class="line">		<span class="keyword">return</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> (electionService.doesLeaderCrashed()) &#123;</span><br><span class="line">		<span class="keyword">if</span> (electionService.reelect()) &#123;</span><br><span class="line">			log.info(<span class="string">"follower探测leader状态: eader宕机, 通过竞选, 成功上位"</span>);</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			log.info(<span class="string">"follower探测leader状态: eader宕机, 竞选失败, 再等机会"</span>);</span><br><span class="line">		&#125;</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		log.info(<span class="string">"follower探测leader状态: leader在岗, 等待机会"</span>);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="选举服务的具体实现"><a href="#选举服务的具体实现" class="headerlink" title="选举服务的具体实现"></a>选举服务的具体实现</h3><h4 id="初始化变量"><a href="#初始化变量" class="headerlink" title="初始化变量"></a>初始化变量</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> String key = <span class="string">"leader-election"</span>; <span class="comment">// 选举的key</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">long</span> tickIntervalMillis = <span class="number">5000</span>; <span class="comment">// 心跳间隔, 毫秒</span></span><br><span class="line"><span class="keyword">private</span> AtomicLong version = <span class="keyword">new</span> AtomicLong(<span class="number">0L</span>); <span class="comment">// 如果竞选leader成功, 则要维护版本号</span></span><br><span class="line"><span class="keyword">private</span> AtomicBoolean isLeader = <span class="keyword">new</span> AtomicBoolean(<span class="keyword">false</span>); <span class="comment">// 当前是否是leader</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 初始化选举是必须的</span></span><br><span class="line"><span class="meta">@PostConstruct</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">init</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	<span class="keyword">boolean</span> won = elect();</span><br><span class="line">	<span class="keyword">if</span> (won) &#123;</span><br><span class="line">		log.info(<span class="string">"初选成功, 成为leader: version-&gt; &#123;&#125;, id-&gt; &#123;&#125;"</span>, version, id);</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		log.info(<span class="string">"初选失败, 不骄不躁, 勤勤恳恳, 努力工作"</span>);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="选举的过程"><a href="#选举的过程" class="headerlink" title="选举的过程"></a>选举的过程</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">elect</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	Election e = electionMapper.selectOne(key);</span><br><span class="line">	<span class="keyword">if</span> (e == <span class="keyword">null</span>) &#123;</span><br><span class="line">		<span class="keyword">throw</span> <span class="keyword">new</span> ElectionException(<span class="string">"没有找到elect_key: "</span> + key);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> electing(<span class="number">0</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">reelect</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	Election e = electionMapper.selectOne(key);</span><br><span class="line">	<span class="keyword">if</span> (e == <span class="keyword">null</span>) &#123;</span><br><span class="line">		<span class="keyword">throw</span> <span class="keyword">new</span> ElectionException(<span class="string">"没有找到elect_key: "</span> + key);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> electing(e.getVersion());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">boolean</span> <span class="title">electing</span><span class="params">(<span class="keyword">long</span> initVersion)</span> </span>&#123;</span><br><span class="line">	<span class="keyword">boolean</span> updated = compareAndSetVersionAndLeaderId(initVersion);</span><br><span class="line">	<span class="keyword">if</span> (updated) &#123;</span><br><span class="line">		log.debug(<span class="string">"竞选leader成功, 版本号置为1"</span>);</span><br><span class="line">		version.set(<span class="number">1</span>);</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		log.debug(<span class="string">"竞选leader失败, 等下次吧"</span>);</span><br><span class="line">	&#125;</span><br><span class="line">	isLeader.set(updated);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> updated;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="心跳"><a href="#心跳" class="headerlink" title="心跳"></a>心跳</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tick</span><span class="params">()</span> <span class="keyword">throws</span> ElectionException </span>&#123;</span><br><span class="line">	<span class="keyword">if</span> (!isLeader()) &#123;</span><br><span class="line">		<span class="keyword">throw</span> <span class="keyword">new</span> ElectionException(<span class="string">"当前不是leader, 不能发送心跳"</span>);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">boolean</span> updated = compareAndSetVersion(version.get(), version.incrementAndGet());</span><br><span class="line">	isLeader.set(updated);</span><br><span class="line">	<span class="keyword">if</span> (!updated) &#123;</span><br><span class="line">		version.set(<span class="number">0L</span>);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> updated;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="探活"><a href="#探活" class="headerlink" title="探活"></a>探活</h4><p>follower的动作, 检查leader上次探活距今有没有超过5s, 超过就认为leader宕掉了</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">doesLeaderCrashed</span><span class="params">()</span> <span class="keyword">throws</span> ElectionException </span>&#123;</span><br><span class="line">	<span class="keyword">if</span> (isLeader()) &#123;</span><br><span class="line">		<span class="keyword">throw</span> <span class="keyword">new</span> ElectionException(<span class="string">"当前不是follower, 不能探测leader是否活跃"</span>);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	Election e = electionMapper.selectOne(key);</span><br><span class="line">	<span class="keyword">if</span> (e == <span class="keyword">null</span>) &#123;</span><br><span class="line">		<span class="keyword">throw</span> <span class="keyword">new</span> ElectionException(<span class="string">"没有找到elect_key: "</span> + key);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">long</span> tickTime = e.getTickTime().getTime();</span><br><span class="line">	<span class="keyword">long</span> currTime = System.currentTimeMillis();</span><br><span class="line">	<span class="keyword">if</span> ((currTime - tickTime) &gt; tickIntervalMillis) &#123;</span><br><span class="line">		log.debug(<span class="string">"leader嗝屁了, 终于熬出头了"</span>);</span><br><span class="line">		<span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		log.debug(<span class="string">"leader仍然在岗, 别灰心, 持续探测"</span>);</span><br><span class="line">		<span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>(刘蒙, <a href="mailto:liumeng@luojilab.com" target="_blank" rel="noopener">liumeng@luojilab.com</a>)</p>
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a><em>参考资料</em></h1><ul>
+<li><a href="https://juejin.im/post/5b4977ae5188251b146b2fc8" target="_blank" rel="noopener">面试必备之乐观锁与悲观锁</a></li>
+</ul>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/MySQL/" rel="tag"># MySQL</a>
+          
+            <a href="/tags/leader-election/" rel="tag"># leader-election</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/09/29/【译】列式数据库/" rel="next" title="【译】列式数据库">
+                <i class="fa fa-chevron-left"></i> 【译】列式数据库
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">刘蒙</p>
+              <p class="site-description motion-element" itemprop="description">生活应该是丰富多彩的, 而不是每天都在机械的重复昨天的故事</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">4</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">tags</span>
+                
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#前言"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#leader-election"><span class="nav-number">1.1.</span> <span class="nav-text">leader-election</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#预备知识"><span class="nav-number">1.2.</span> <span class="nav-text">预备知识</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#设计"><span class="nav-number">2.</span> <span class="nav-text">设计</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#初次选举过程"><span class="nav-number">2.1.</span> <span class="nav-text">初次选举过程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#leader宕机之后的改选"><span class="nav-number">2.2.</span> <span class="nav-text">leader宕机之后的改选</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#竞争表"><span class="nav-number">2.3.</span> <span class="nav-text">竞争表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#服务实现"><span class="nav-number">2.4.</span> <span class="nav-text">服务实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#选举服务具备以下职责"><span class="nav-number">2.4.1.</span> <span class="nav-text">选举服务具备以下职责</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#leader的心跳和follower的探活都由定时任务来发起"><span class="nav-number">2.4.2.</span> <span class="nav-text">leader的心跳和follower的探活都由定时任务来发起</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#选举服务的具体实现"><span class="nav-number">2.4.3.</span> <span class="nav-text">选举服务的具体实现</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#初始化变量"><span class="nav-number">2.4.3.1.</span> <span class="nav-text">初始化变量</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#选举的过程"><span class="nav-number">2.4.3.2.</span> <span class="nav-text">选举的过程</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#心跳"><span class="nav-number">2.4.3.3.</span> <span class="nav-text">心跳</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#探活"><span class="nav-number">2.4.3.4.</span> <span class="nav-text">探活</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#参考资料"><span class="nav-number">3.</span> <span class="nav-text">参考资料</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">刘蒙</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+          <span id="scrollpercent"><span>0</span>%</span>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.4"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    var isXml = true;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length === 0) {
+      search_path = "search.xml";
+    } else if (/json$/i.test(search_path)) {
+      isXml = false;
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    var onPopupClose = function (e) {
+      $('.popup').hide();
+      $('#local-search-input').val('');
+      $('.search-result-list').remove();
+      $('#no-result').remove();
+      $(".local-search-pop-overlay").remove();
+      $('body').css('overflow', '');
+    }
+
+    function proceedsearch() {
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay"></div>')
+        .css('overflow', 'hidden');
+      $('.search-popup-overlay').click(onPopupClose);
+      $('.popup').toggle();
+      var $localSearchInput = $('#local-search-input');
+      $localSearchInput.attr("autocapitalize", "none");
+      $localSearchInput.attr("autocorrect", "off");
+      $localSearchInput.focus();
+    }
+
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+      'use strict';
+
+      // start loading animation
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay">' +
+          '<div id="search-loading-icon">' +
+          '<i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>' +
+          '</div>' +
+          '</div>')
+        .css('overflow', 'hidden');
+      $("#search-loading-icon").css('margin', '20% auto 0 auto').css('text-align', 'center');
+
+      $.ajax({
+        url: path,
+        dataType: isXml ? "xml" : "json",
+        async: true,
+        success: function(res) {
+          // get the contents from search data
+          isfetched = true;
+          $('.popup').detach().appendTo('.header-inner');
+          var datas = isXml ? $("entry", res).map(function() {
+            return {
+              title: $("title", this).text(),
+              content: $("content",this).text(),
+              url: $("url" , this).text()
+            };
+          }).get() : res;
+          var input = document.getElementById(search_id);
+          var resultContent = document.getElementById(content_id);
+          var inputEventFunction = function() {
+            var searchText = input.value.trim().toLowerCase();
+            var keywords = searchText.split(/[\s\-]+/);
+            if (keywords.length > 1) {
+              keywords.push(searchText);
+            }
+            var resultItems = [];
+            if (searchText.length > 0) {
+              // perform local searching
+              datas.forEach(function(data) {
+                var isMatch = false;
+                var hitCount = 0;
+                var searchTextCount = 0;
+                var title = data.title.trim();
+                var titleInLowerCase = title.toLowerCase();
+                var content = data.content.trim().replace(/<[^>]+>/g,"");
+                var contentInLowerCase = content.toLowerCase();
+                var articleUrl = decodeURIComponent(data.url);
+                var indexOfTitle = [];
+                var indexOfContent = [];
+                // only match articles with not empty titles
+                if(title != '') {
+                  keywords.forEach(function(keyword) {
+                    function getIndexByWord(word, text, caseSensitive) {
+                      var wordLen = word.length;
+                      if (wordLen === 0) {
+                        return [];
+                      }
+                      var startPosition = 0, position = [], index = [];
+                      if (!caseSensitive) {
+                        text = text.toLowerCase();
+                        word = word.toLowerCase();
+                      }
+                      while ((position = text.indexOf(word, startPosition)) > -1) {
+                        index.push({position: position, word: word});
+                        startPosition = position + wordLen;
+                      }
+                      return index;
+                    }
+
+                    indexOfTitle = indexOfTitle.concat(getIndexByWord(keyword, titleInLowerCase, false));
+                    indexOfContent = indexOfContent.concat(getIndexByWord(keyword, contentInLowerCase, false));
+                  });
+                  if (indexOfTitle.length > 0 || indexOfContent.length > 0) {
+                    isMatch = true;
+                    hitCount = indexOfTitle.length + indexOfContent.length;
+                  }
+                }
+
+                // show search results
+
+                if (isMatch) {
+                  // sort index by position of keyword
+
+                  [indexOfTitle, indexOfContent].forEach(function (index) {
+                    index.sort(function (itemLeft, itemRight) {
+                      if (itemRight.position !== itemLeft.position) {
+                        return itemRight.position - itemLeft.position;
+                      } else {
+                        return itemLeft.word.length - itemRight.word.length;
+                      }
+                    });
+                  });
+
+                  // merge hits into slices
+
+                  function mergeIntoSlice(text, start, end, index) {
+                    var item = index[index.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    var hits = [];
+                    var searchTextCountInSlice = 0;
+                    while (position + word.length <= end && index.length != 0) {
+                      if (word === searchText) {
+                        searchTextCountInSlice++;
+                      }
+                      hits.push({position: position, length: word.length});
+                      var wordEnd = position + word.length;
+
+                      // move to next position of hit
+
+                      index.pop();
+                      while (index.length != 0) {
+                        item = index[index.length - 1];
+                        position = item.position;
+                        word = item.word;
+                        if (wordEnd > position) {
+                          index.pop();
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    searchTextCount += searchTextCountInSlice;
+                    return {
+                      hits: hits,
+                      start: start,
+                      end: end,
+                      searchTextCount: searchTextCountInSlice
+                    };
+                  }
+
+                  var slicesOfTitle = [];
+                  if (indexOfTitle.length != 0) {
+                    slicesOfTitle.push(mergeIntoSlice(title, 0, title.length, indexOfTitle));
+                  }
+
+                  var slicesOfContent = [];
+                  while (indexOfContent.length != 0) {
+                    var item = indexOfContent[indexOfContent.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    // cut out 100 characters
+                    var start = position - 20;
+                    var end = position + 80;
+                    if(start < 0){
+                      start = 0;
+                    }
+                    if (end < position + word.length) {
+                      end = position + word.length;
+                    }
+                    if(end > content.length){
+                      end = content.length;
+                    }
+                    slicesOfContent.push(mergeIntoSlice(content, start, end, indexOfContent));
+                  }
+
+                  // sort slices in content by search text's count and hits' count
+
+                  slicesOfContent.sort(function (sliceLeft, sliceRight) {
+                    if (sliceLeft.searchTextCount !== sliceRight.searchTextCount) {
+                      return sliceRight.searchTextCount - sliceLeft.searchTextCount;
+                    } else if (sliceLeft.hits.length !== sliceRight.hits.length) {
+                      return sliceRight.hits.length - sliceLeft.hits.length;
+                    } else {
+                      return sliceLeft.start - sliceRight.start;
+                    }
+                  });
+
+                  // select top N slices in content
+
+                  var upperBound = parseInt('1');
+                  if (upperBound >= 0) {
+                    slicesOfContent = slicesOfContent.slice(0, upperBound);
+                  }
+
+                  // highlight title and content
+
+                  function highlightKeyword(text, slice) {
+                    var result = '';
+                    var prevEnd = slice.start;
+                    slice.hits.forEach(function (hit) {
+                      result += text.substring(prevEnd, hit.position);
+                      var end = hit.position + hit.length;
+                      result += '<b class="search-keyword">' + text.substring(hit.position, end) + '</b>';
+                      prevEnd = end;
+                    });
+                    result += text.substring(prevEnd, slice.end);
+                    return result;
+                  }
+
+                  var resultItem = '';
+
+                  if (slicesOfTitle.length != 0) {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + highlightKeyword(title, slicesOfTitle[0]) + "</a>";
+                  } else {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + title + "</a>";
+                  }
+
+                  slicesOfContent.forEach(function (slice) {
+                    resultItem += "<a href='" + articleUrl + "'>" +
+                      "<p class=\"search-result\">" + highlightKeyword(content, slice) +
+                      "...</p>" + "</a>";
+                  });
+
+                  resultItem += "</li>";
+                  resultItems.push({
+                    item: resultItem,
+                    searchTextCount: searchTextCount,
+                    hitCount: hitCount,
+                    id: resultItems.length
+                  });
+                }
+              })
+            };
+            if (keywords.length === 1 && keywords[0] === "") {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>'
+            } else if (resultItems.length === 0) {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>'
+            } else {
+              resultItems.sort(function (resultLeft, resultRight) {
+                if (resultLeft.searchTextCount !== resultRight.searchTextCount) {
+                  return resultRight.searchTextCount - resultLeft.searchTextCount;
+                } else if (resultLeft.hitCount !== resultRight.hitCount) {
+                  return resultRight.hitCount - resultLeft.hitCount;
+                } else {
+                  return resultRight.id - resultLeft.id;
+                }
+              });
+              var searchResultList = '<ul class=\"search-result-list\">';
+              resultItems.forEach(function (result) {
+                searchResultList += result.item;
+              })
+              searchResultList += "</ul>";
+              resultContent.innerHTML = searchResultList;
+            }
+          }
+
+          if ('auto' === 'auto') {
+            input.addEventListener('input', inputEventFunction);
+          } else {
+            $('.search-icon').click(inputEventFunction);
+            input.addEventListener('keypress', function (event) {
+              if (event.keyCode === 13) {
+                inputEventFunction();
+              }
+            });
+          }
+
+          // remove loading animation
+          $(".local-search-pop-overlay").remove();
+          $('body').css('overflow', '');
+
+          proceedsearch();
+        }
+      });
+    }
+
+    // handle and trigger popup window;
+    $('.popup-trigger').click(function(e) {
+      e.stopPropagation();
+      if (isfetched === false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+    });
+
+    $('.popup-btn-close').click(onPopupClose);
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+    $(document).on('keyup', function (event) {
+      var shouldDismissSearchPopup = event.which === 27 &&
+        $('.search-popup').is(':visible');
+      if (shouldDismissSearchPopup) {
+        onPopupClose();
+      }
+    });
+  </script>
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
